@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Promote MDN
-Version: 1.1.0
+Version: 1.2.0
 Plugin URI: http://github.com/groovecoder/wp-promote-mdn
 Author: Luke Crouch
 Author URI: http://groovecoder.com
@@ -300,7 +300,14 @@ sumo, http://support.mozilla.org/
 endif;
 
 if ( class_exists( 'PromoteMDN' ) ) :
-    if ( !$GLOBALS['argv'][1] == 'tests/PromoteMDNTest.php' ) {
+    $in_phpunit = false;
+    if ( array_key_exists( 'argv', $GLOBALS ) ) {
+        foreach ($GLOBALS['argv'] as $arg) {
+            if ( stripos( $arg, 'phpunit' ) !== false )
+                $in_phpunit = true;
+        }
+    }
+    if ( !$in_phpunit ) {
         $PromoteMDN = new PromoteMDN();
         if ( isset( $PromoteMDN ) ) {
             register_activation_hook( __FILE__, array( &$PromoteMDN, 'install' ) );
