@@ -13,33 +13,45 @@ Text Domain: promote-mdn
 if ( !class_exists( 'PromoteMDN' ) ) :
 
 class PromoteMDN {
-    var $PromoteMDN_DB_option = 'PromoteMDN';
-    var $PromoteMDN_options;
+    public $option_name = 'PromoteMDN';
+    public $options;
+    public $default_options = array(
+        'excludeheading' => 'on',
+        'ignore' => 'about,',
+        'ignorepost' => 'contact,',
+        'maxlinks' => 3,
+        'maxsingle' => 1,
+        'customkey' => '',
+        'customkey_url' => 'https://developer.mozilla.org/en-US/docs/Template:Promote-MDN?raw=1',
+        'customkey_url_expire' => 86400,
+        'blanko' => 'on',
+        'allowfeed' => '',
+        'maxsingleurl' => '1',
+    );
 
-    // Initialize WordPress hooks
-    function PromoteMDN()
+    function __construct($options = null)
     {
-        add_filter( 'the_content' ,  array( &$this, 'promote_mdn_the_content_filter' ), 10 );
-        // Add Options Page
-        add_action( 'admin_menu' ,  array( &$this, 'promote_mdn_admin_menu' ) );
+        if ( $options )
+            $this->options = $options;
+        else
+            $this->options = get_option( $this->option_name );
+
+        // WordPress hooks
+        add_filter( 'the_content' ,  array( &$this, 'process_text' ), 10 );
+        add_action( 'admin_menu' ,  array( &$this, 'admin_menu' ) );
+
+        // Load translated strings
         load_plugin_textdomain( 'promote-mdn', false, 'promote-mdn/languages/' );
-        //add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
     }
 
-    function load_plugin_textdomain()
+    function process_text( $text )
     {
-        load_plugin_textdomain( 'promote-mdn', false, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
-    }
-
-
-    function promote_mdn_process_text( $text )
-    {
-        $options = $this->get_options();
+        $options = $this->options;
         $links   = 0;
         if ( is_feed() && !$options['allowfeed'] )
             return $text;
 
-        $arrignorepost = $this->explode_trim( ',' , ( $options['ignorepost'] ) );
+        $arrignorepost = $this->explode_lower_trim( ',' , ( $options['ignorepost'] ) );
         if ( is_page( $arrignorepost ) || is_single( $arrignorepost ) ) {
             return $text;
         }
@@ -50,7 +62,7 @@ class PromoteMDN {
 
         $urls = array();
 
-        $arrignore = $this->explode_trim( ',' , ( $options['ignore'] ) );
+        $arrignore = $this->explode_lower_trim( ',' , ( $options['ignore'] ) );
         if ( $options['excludeheading'] == 'on' ) {
             //Here insert special characters
             $text = preg_replace( '%(<h.*?>)(.*?)(</h.*?>)%sie' , "'\\1'.wp_insertspecialchars('\\2').'\\3'" , $text );
@@ -63,7 +75,7 @@ class PromoteMDN {
         if ( !empty( $options['customkey_url'] ) )
         {
             if ( false === ( $customkey_url_value = get_transient( 'promote_mdn_url_value' ) ) ){
-                $customkey_url_value = $this->promote_mdn_reload_value( $options['customkey_url'] );
+                $customkey_url_value = $this->reload_value( $options['customkey_url'] );
             }
             $options['customkey'] = $options['customkey'] . "\n" . $customkey_url_value;
         }
@@ -87,6 +99,8 @@ class PromoteMDN {
             }
             foreach ( $kw_array as $name => $url )
             {
+                if ( in_array( strtolower( $name ), $arrignore ) )
+                    continue;
                 if (   ( !$maxlinks || ( $links < $maxlinks ) )
                     && ( trailingslashit( $url ) != $thisurl )
                     && ( !in_array( strtolower( $name ), $arrignore ) )
@@ -97,7 +111,9 @@ class PromoteMDN {
 
                         if( $options['customkey_preventduplicatelink'] == TRUE ) $name = str_replace( ',' , '|' , $name );
 
-                        $replace = "<a title=\"$1\" href=\"$url\">$1</a>";
+                        if( $options['blanko'] )
+                            $target = 'target="_blank"';
+                        $replace = "<a $target title=\"$1\" href=\"$url\">$1</a>";
                         $regexp  = str_replace( '$name', $name, $reg );
                         //$regexp="/(?!(?:[^<]+>|[^>]+<\/a>))(?<!\p{L})($name)(?!\p{L})/imsU";
                         $newtext = preg_replace( $regexp, $replace, $text, $maxsingle );
@@ -121,20 +137,8 @@ class PromoteMDN {
 
     }
 
-    function promote_mdn_the_content_filter( $text )
-    {
-        $result  = $this->promote_mdn_process_text( $text );
-        $options = $this->get_options();
-        $link    = parse_url( get_bloginfo( 'wpurl' ) );
-        $host    = 'http://' . $link['host'];
 
-        if ( $options['blanko'] )
-            $result = preg_replace( '%<a(\s+.*?href=\S(?!' . $host . '))%i', '<a target="_blank"\\1', $result );
-
-        return $result;
-    }
-
-    function promote_mdn_reload_value( $url )
+    function reload_value( $url )
     {
         $body = wp_remote_retrieve_body(
             wp_remote_get(
@@ -150,82 +154,46 @@ class PromoteMDN {
         return $customkey_url_value;
     }
 
-    function explode_trim( $separator, $text )
+    function explode_lower_trim( $separator, $text )
     {
         $arr = explode( $separator, $text );
 
         $ret = array();
         foreach ( $arr as $e )
         {
-          $ret[] = trim( $e );
+          $ret[] = strtolower( trim( $e ) );
         }
         return $ret;
     }
 
-    // Handle our options
-    function get_options()
-    {
-     $options = array(
-         'excludeheading' => 'on',
-         'ignore' => 'about,',
-         'ignorepost' => 'contact,',
-         'maxlinks' => 3,
-         'maxsingle' => 1,
-         'customkey' => '',
-         'customkey_url' => 'https://developer.mozilla.org/en-US/docs/Template:Promote-MDN?raw=1',
-         'customkey_url_expire' => 60 * 60 * 24,
-         'blanko' => 'on',
-         'allowfeed' => '',
-         'maxsingleurl' => '1',
-         );
-
-        $saved = get_option( $this->PromoteMDN_DB_option );
-
-
-         if ( !empty( $saved ) ) {
-             foreach ( $saved as $key => $option )
-                    $options[$key] = $option;
-         }
-
-         if ( $saved != $options )
-            update_option( $this->PromoteMDN_DB_option, $options );
-
-         return $options;
-    }
-
-    // Set up everything
-    function install()
-    {
-        $PromoteMDN_options = $this->get_options();
-    }
 
     function handle_options()
     {
-        $options = $this->get_options();
+        $options = $this->options;
         if ( isset( $_POST['submitted'] ) ) {
             check_admin_referer( 'seo-smart-links' );
 
             if ( isset( $_POST['reload_now'] ) ) {
-                $customkey_url = stripslashes( $options['customkey_url'] );
-                $customkey_url_value = $this->promote_mdn_reload_value( $customkey_url );
-                $reloaded_message = __( 'Reloaded values from the URL.', 'promote-mdn' );
-                $message_box = '<div class="updated fade"><p>' . $reloaded_message . '</p></div>';
+                $customkey_url       = stripslashes( $options['customkey_url'] );
+                $customkey_url_value = $this->reload_value( $customkey_url );
+                $reloaded_message    = __( 'Reloaded values from the URL.', 'promote-mdn' );
+                $message_box         = '<div class="updated fade"><p>' . $reloaded_message . '</p></div>';
                 echo $message_box;
             } else {
-                $options['excludeheading'] = $_POST['excludeheading'];
-                $options['ignore'] = $_POST['ignore'];
-                $options['ignorepost'] = $_POST['ignorepost'];
-                $options['maxlinks'] = (int) $_POST['maxlinks'];
-                $options['maxsingle'] = (int) $_POST['maxsingle'];
-                $options['maxsingleurl'] = (int) $_POST['maxsingleurl'];
-                $options['customkey'] = $_POST['customkey'];
-                $options['customkey_url'] = $_POST['customkey_url'];
+                $options['excludeheading']       = $_POST['excludeheading'];
+                $options['ignore']               = $_POST['ignore'];
+                $options['ignorepost']           = $_POST['ignorepost'];
+                $options['maxlinks']             = (int) $_POST['maxlinks'];
+                $options['maxsingle']            = (int) $_POST['maxsingle'];
+                $options['maxsingleurl']         = (int) $_POST['maxsingleurl'];
+                $options['customkey']            = $_POST['customkey'];
+                $options['customkey_url']        = $_POST['customkey_url'];
                 $options['customkey_url_expire'] = $_POST['customkey_url_expire'];
-                $options['blanko'] = $_POST['blanko'];
-                $options['allowfeed'] = $_POST['allowfeed'];
+                $options['blanko']               = $_POST['blanko'];
+                $options['allowfeed']            = $_POST['allowfeed'];
 
                 update_option( $this->PromoteMDN_DB_option, $options );
-                $settings_message = __('Plugin settings saved.', 'promote-mdn' );
+                $settings_message = __( 'Plugin settings saved.', 'promote-mdn' );
                 echo '<div class="updated fade"><p>' . $settings_message . '</p></div>';
             }
         }
@@ -261,51 +229,51 @@ class PromoteMDN {
         <div class="dbx-content">
 
 <?php
-        $top_img_title = __( 'MDN is your Web Developer Toolbox for docs, demos and more on HTML, CSS, JavaScript and other Web standards and open technologies.' , 'promote-mdn');
+        $top_img_title = __( 'MDN is your Web Developer Toolbox for docs, demos and more on HTML, CSS, JavaScript and other Web standards and open technologies.' , 'promote-mdn' );
 ?>
         <a href="https://developer.mozilla.org/web/?WT.mc_id=mdn37" title="<?php echo $top_img_title ?>"><img src="https://developer.mozilla.org/media/img/promote/promobutton_mdn37.png" id="logo" alt="<?php echo $top_img_title ?>" /></a>
-        <p><?php _e( 'MDN is the best online resource - for web developers, by web developers.', 'promote-mdn') ?> </p>
-        <p><?php _e( 'Promote MDN automatically links keywords and phrases in your posts and pages to MDN URLs.' , 'promote-mdn') ?></p>
+        <p><?php _e( 'MDN is the best online resource - for web developers, by web developers.', 'promote-mdn' ) ?> </p>
+        <p><?php _e( 'Promote MDN automatically links keywords and phrases in your posts and pages to MDN URLs.' , 'promote-mdn' ) ?></p>
 
-            <form name="PromoteMDN" action="$action_url" method="post">
-                <input type="hidden" id="_wpnonce" name="_wpnonce" value="$nonce" />
+        <form name="PromoteMDN" action="<?php echo $action_url ?>" method="post">
+        <input type="hidden" id="_wpnonce" name="_wpnonce" value="<?php echo $nonce ?>" />
                 <input type="hidden" name="submitted" value="1" />
 
 
-                <h4><?php _e( 'Settings' , 'promote-mdn') ?></h4>
-                <p><?php _e( 'Load keywords from URL' , 'promote-mdn') ?> (<em id="preview"><a href="<?php echo $customkey_url ?>" target="_blank"><?php _e( 'Preview' , 'promote-mdn') ?></a></em>):
+                <h4><?php _e( 'Settings' , 'promote-mdn' ) ?></h4>
+                <p><?php _e( 'Load keywords from URL' , 'promote-mdn' ) ?> (<em id="preview"><a href="<?php echo $customkey_url ?>" target="_blank"><?php _e( 'Preview' , 'promote-mdn' ) ?></a></em>):
                 <input type="text" name="customkey_url" value="<?php echo $customkey_url ?>" class="full-width" />
-                <?php _e( 'Reload keywords after (seconds):' , 'promote-mdn') ?> <input type="text" name="customkey_url_expire" size="10" value="<?php echo $customkey_url_expire ?>"/>
-                <button type="submit" name="reload_now"><?php _e( 'Reload now' , 'promote-mdn') ?></button>
+                <?php _e( 'Reload keywords after (seconds):' , 'promote-mdn' ) ?> <input type="text" name="customkey_url_expire" size="10" value="<?php echo $customkey_url_expire ?>"/>
+                <button type="submit" name="reload_now"><?php _e( 'Reload now' , 'promote-mdn' ) ?></button>
                 </p>
-                <input type="checkbox" name="allowfeed" <?php echo $allowfeed ?>/> <label for="allowfeed"><?php _e( 'Add links to RSS feeds' , 'promote-mdn') ?></label><br/>
-                <input type="checkbox" name="blanko" <?php echo $blanko ?>/> <label for="blanko"><?php _e( 'Open links in new window' , 'promote-mdn') ?></label> <br/>
+                <input type="checkbox" name="allowfeed" <?php echo $allowfeed ?>/> <label for="allowfeed"><?php _e( 'Add links to RSS feeds' , 'promote-mdn' ) ?></label><br/>
+                <input type="checkbox" name="blanko" <?php echo $blanko ?>/> <label for="blanko"><?php _e( 'Open links in new window' , 'promote-mdn' ) ?></label> <br/>
 
 
-                <h4><?php _e( 'Exceptions' , 'promote-mdn') ?></h4>
-                <input type="checkbox" name="excludeheading" <?php echo $excludeheading ?>/> <label for="excludeheading"><?php _e( 'Do not add links in heading tags (h1,h2,h3,h4,h5,h6).' , 'promote-mdn') ?></label><br/>
-                <p><?php _e( 'Do not add links to the following posts or pages (comma-separated id, slug, name):' , 'promote-mdn') ?></p>
+                <h4><?php _e( 'Exceptions' , 'promote-mdn' ) ?></h4>
+                <input type="checkbox" name="excludeheading" <?php echo $excludeheading ?>/> <label for="excludeheading"><?php _e( 'Do not add links in heading tags (h1,h2,h3,h4,h5,h6).' , 'promote-mdn' ) ?></label><br/>
+                <p><?php _e( 'Do not add links to the following posts or pages (comma-separated id, slug, name):' , 'promote-mdn' ) ?></p>
                 <input type="text" name="ignorepost" value="<?php echo $ignorepost ?>" class="full-width"/>
-                <p><?php _e( 'Do not add links on the following phrases (comma-separated):' , 'promote-mdn') ?></p>
+                <p><?php _e( 'Do not add links on the following phrases (comma-separated):' , 'promote-mdn' ) ?></p>
                 <input type="text" name="ignore" class="full-width" value="<?php echo $ignore ?>"/>
 
 
-                <h4><?php _e( 'Limits' , 'promote-mdn') ?></h4>
-                <?php _e( 'Max links to generate per post:' , 'promote-mdn') ?> <input type="text" name="maxlinks" size="2" value="<?php echo $maxlinks ?>"/><br/>
-                <?php _e( 'Max links to generate for a single keyword/phrase:' , 'promote-mdn') ?> <input type="text" name="maxsingle" size="2" value="<?php echo $maxsingle ?>"/><br/>
-                <?php _e( 'Max links to generate for a single URL:' , 'promote-mdn') ?> <input type="text" name="maxsingleurl" size="2" value="<?php echo $maxsingleurl ?>"/>
+                <h4><?php _e( 'Limits' , 'promote-mdn' ) ?></h4>
+                <?php _e( 'Max links to generate per post:' , 'promote-mdn' ) ?> <input type="text" name="maxlinks" size="2" value="<?php echo $maxlinks ?>"/><br/>
+                <?php _e( 'Max links to generate for a single keyword/phrase:' , 'promote-mdn' ) ?> <input type="text" name="maxsingle" size="2" value="<?php echo $maxsingle ?>"/><br/>
+                <?php _e( 'Max links to generate for a single URL:' , 'promote-mdn' ) ?> <input type="text" name="maxsingleurl" size="2" value="<?php echo $maxsingleurl ?>"/>
 
 
-                <h4><?php _e( 'Custom Keywords' , 'promote-mdn') ?></h4>
-                <p><?php _e( 'Extra keywords to automaticaly link. Use comma to seperate keywords and add target url at the end. Use a new line for new url and set of keywords. e.g.,' , 'promote-mdn') ?><br/>
+                <h4><?php _e( 'Custom Keywords' , 'promote-mdn' ) ?></h4>
+                <p><?php _e( 'Extra keywords to automaticaly link. Use comma to seperate keywords and add target url at the end. Use a new line for new url and set of keywords. e.g.,' , 'promote-mdn' ) ?><br/>
                 <pre>addons, amo, http://addons.mozilla.org/
 sumo, http://support.mozilla.org/
                 </pre>
                 </p>
 
                 <textarea name="customkey" id="customkey" rows="10" cols="90"  ><?php echo $customkey ?></textarea>
-                <em><?php _e( 'Note: These keywords will take priority over those loaded at the URL. If you have too many custom keywords here, you may not link to MDN at all.' , 'promote-mdn') ?></em>
-                <div class="submit"><input type="submit" name="Submit" value="<?php _e( 'Update options' , 'promote-mdn') ?>" class="button-primary" /></div>
+                <em><?php _e( 'Note: These keywords will take priority over those loaded at the URL. If you have too many custom keywords here, you may not link to MDN at all.' , 'promote-mdn' ) ?></em>
+                <div class="submit"><input type="submit" name="Submit" value="<?php _e( 'Update options' , 'promote-mdn' ) ?>" class="button-primary" /></div>
             </form>
 
         </div>
@@ -315,18 +283,28 @@ sumo, http://support.mozilla.org/
 
     }
 
-    function promote_mdn_admin_menu()
+    function admin_menu()
     {
         add_options_page( 'Promote MDN Options', 'Promote MDN', 8, basename( __FILE__ ), array( &$this, 'handle_options' ) );
+    }
+
+    // Set up everything
+    function install()
+    {
+        $options = get_option( $this->option_name );
+        if (!$options)
+            update_option( $this->option_name, $this->default_options );
     }
 }
 
 endif;
 
 if ( class_exists( 'PromoteMDN' ) ) :
-    $PromoteMDN = new PromoteMDN();
-    if ( isset( $PromoteMDN ) ) {
-        register_activation_hook( __FILE__, array( &$PromoteMDN, 'install' ) );
+    if ( !$GLOBALS['argv'][1] == 'tests/PromoteMDNTest.php' ) {
+        $PromoteMDN = new PromoteMDN();
+        if ( isset( $PromoteMDN ) ) {
+            register_activation_hook( __FILE__, array( &$PromoteMDN, 'install' ) );
+        }
     }
 endif;
 
