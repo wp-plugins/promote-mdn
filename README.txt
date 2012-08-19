@@ -4,7 +4,7 @@ Donate link:
 Tags: mdn, links
 Requires at least: 2.8
 Tested up to: 3.4.1
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,7 +49,7 @@ promote MDN in search results by automatically creating inbound links for it.
 
 == Changelog ==
 = 1.2 =
-* Internationalization and initial translations - Polish, Dutch, Korean, German
+* Internationalization and initial translations - Polish, Dutch, German, Portuguese (Brazil)
 
 = 1.1 =
 * Add "Reload now" button and send Cache-Control: no-cache, must-revalidate to MDN
