@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Promote MDN
-Version: 1.3.0
+Version: 1.4.0
 Plugin URI: http://github.com/groovecoder/wp-promote-mdn
 Author: Luke Crouch
 Author URI: http://groovecoder.com
@@ -16,7 +16,7 @@ class PromoteMDN {
     public $option_name = 'PromoteMDN';
     public $options;
     public $install_options = array(
-        'excludeheading' => 'on',
+        'exclude_elems' => 'blockquote, code, h, pre, q',
         'ignore' => 'about,',
         'ignorepost' => 'contact,',
         'maxlinks' => 3,
@@ -25,9 +25,10 @@ class PromoteMDN {
         'customkey_url' => 'https://developer.mozilla.org/en-US/docs/Template:Promote-MDN?raw=1',
         'customkey_url_expire' => 86400,
         'blanko' => 'on',
+        'add_src_param' => 'on',
         'allowfeed' => '',
         'maxsingleurl' => '1',
-        'hide_notices' => array('1.3'),
+        'hide_notices' => array( '1.3' => 1, '1.4' => 1 ),
     );
 
     function __construct( $options = null )
@@ -46,7 +47,7 @@ class PromoteMDN {
         // WordPress hooks
         add_filter( 'the_content' ,  array( &$this, 'process_text' ), 10 );
         add_action( 'admin_menu' ,  array( &$this, 'admin_menu' ) );
-        add_action( 'admin_notices' , array(&$this,'admin_notices') );
+        add_action( 'admin_notices' , array( &$this, 'admin_notices' ) );
         add_action( 'widgets_init', create_function( '', 'register_widget( "PromoteMDN_Widget" );' ) );
 
         // Load translated strings
@@ -66,15 +67,19 @@ class PromoteMDN {
         }
 
         $maxlinks     = ( $options['maxlinks'] > 0 ) ? $options['maxlinks'] : 0;
-        $maxsingle    = ( $options['maxsingle'] > 0 ) ? $options['maxsingle'] : -1;
+        $maxsingle    = ( $options['maxsingle'] > 0 ) ? $options['maxsingle'] : 0 - 1;
         $maxsingleurl = ( $options['maxsingleurl'] > 0 ) ? $options['maxsingleurl'] : 0;
 
         $urls = array();
 
-        $arrignore = $this->explode_lower_trim( ',' , ( $options['ignore'] ) );
-        if ( $options['excludeheading'] == 'on' ) {
-            //add salt to headings
-            $text = preg_replace( '%(<h.*?>)(.*?)(</h.*?>)%sie' , "'\\1'.wp_insertspecialchars('\\2').'\\3'" , $text );
+        $arrignore     = $this->explode_lower_trim( ',' , ( $options['ignore'] ) );
+        $exclude_elems = $this->explode_lower_trim( ',', ( $options['exclude_elems'] ) );
+        if ( $exclude_elems ) {
+            // add salt to elements
+            foreach ( $exclude_elems as $el ) {
+                $re   = sprintf( '|(<%s.*?>)(.*?)(</%s.*?>)|sie', $el, $el );
+                $text = preg_replace( $re, "'\\1'.wp_insertspecialchars('\\2').'\\3'", $text );
+            }
         }
 
         $reg_post = '/(?!(?:[^<\[]+[>\]]|[^>\]]+<\/a>))($name)/imsU';
@@ -102,7 +107,9 @@ class PromoteMDN {
                             $i++;
                     }
                 } else {
-                        list( $keyword, $url ) = array_map( 'trim', explode( ',' , $line, 2 ) );
+                        $pieces_array = explode( ',' , $line, 2 );
+                        if ( count( $pieces_array ) > 1)
+                            list( $keyword, $url ) = array_map( 'trim', $pieces_array  );
                         if ( !empty( $keyword ) ) $kw_array[$keyword] = $url;
                 }
             }
@@ -111,19 +118,23 @@ class PromoteMDN {
                 if ( in_array( strtolower( $name ), $arrignore ) )
                     continue;
                 if (   ( !$maxlinks || ( $links < $maxlinks ) )
-                    && ( trailingslashit( $url ) != $thisurl )
                     && ( !in_array( strtolower( $name ), $arrignore ) )
-                    && ( !$maxsingleurl || $urls[$url] < $maxsingleurl ) ) {
-                   if (
-                       ( $options['customkey_preventduplicatelink'] == TRUE ) || stripos( $text, $name ) !== false ) {
+                    && ( !$maxsingleurl || !isset( $urls[$url] ) || $urls[$url] < $maxsingleurl ) 
+                   ) {
+                       if ( !isset( $options['customkey_preventduplicatelink'] ) )
+                            $options['customkey_preventduplicatelink'] = FALSE;
+                       if ( $options['customkey_preventduplicatelink'] == TRUE || stripos( $text, $name ) !== false ) {
                         $name = preg_quote( $name, '/' );
 
                         if ( $options['customkey_preventduplicatelink'] == TRUE ) $name = str_replace( ',' , '|' , $name );
 
+                        $target = '';
                         if ( $options['blanko'] ) {
                             $target = 'target="_blank"';
                         }
-                        $replace = "<a $target title=\"$1\" href=\"$url\">$1</a>";
+                        $href = $url;
+                        if ( $options['add_src_param'] == TRUE ) $href .= '?src=wp-promote-mdn';
+                        $replace = "<a $target title=\"$1\" href=\"$href\">$1</a>";
                         $regexp  = str_replace( '$name', $name, $reg );
                         //$regexp="/(?!(?:[^<]+>|[^>]+<\/a>))(?<!\p{L})($name)(?!\p{L})/imsU";
                         $newtext = preg_replace( $regexp, $replace, $text, $maxsingle );
@@ -137,10 +148,12 @@ class PromoteMDN {
             }
         }
 
-
-        if ( $options['excludeheading'] == 'on' ) {
-            //remove salt from headings
-            $text = preg_replace( '%(<h.*?>)(.*?)(</h.*?>)%sie', "'\\1'.wp_removespecialchars('\\2').'\\3'", $text );
+        if ( $exclude_elems ) {
+            // remove salt from elements
+            foreach ( $exclude_elems as $el ) {
+                $re   = sprintf( '|(<%s.*?>)(.*?)(</%s.*?>)|sie', $el, $el );
+                $text = preg_replace( $re, "'\\1'.wp_removespecialchars('\\2').'\\3'", $text );
+            }
         }
         return trim( $text );
 
@@ -172,6 +185,10 @@ class PromoteMDN {
         {
           $ret[] = strtolower( trim( $e ) );
         }
+        // return empty array for single empty string element
+        // for simpler if-checks
+        if ( count( $ret ) == 1 && $ret[0] == '' )
+            $ret = array();
         return $ret;
     }
 
@@ -188,10 +205,10 @@ class PromoteMDN {
                 $customkey_url_value      = $this->reload_value( $customkey_url );
                 $reloaded_message         = __( 'Reloaded values from the URL.', 'promote-mdn' );
                 $message_box              = '<div class="updated fade"><p>' . $reloaded_message . '</p></div>';
-                update_option( $this->option_name, $options);
+                update_option( $this->option_name, $options );
                 echo $message_box;
             } else {
-                $options['excludeheading']       = $_POST['excludeheading'];
+                $options['exclude_elems']        = $_POST['exclude_elems'];
                 $options['ignore']               = $_POST['ignore'];
                 $options['ignorepost']           = $_POST['ignorepost'];
                 $options['maxlinks']             = (int) $_POST['maxlinks'];
@@ -201,6 +218,7 @@ class PromoteMDN {
                 $options['customkey_url']        = $_POST['customkey_url'];
                 $options['customkey_url_expire'] = $_POST['customkey_url_expire'];
                 $options['blanko']               = $_POST['blanko'];
+                $options['add_src_param']        = $_POST['add_src_param'];
                 $options['allowfeed']            = $_POST['allowfeed'];
 
                 update_option( $this->option_name, $options );
@@ -212,7 +230,7 @@ class PromoteMDN {
         $action_url = $_SERVER['REQUEST_URI'];
 
         $comment = $options['comment'] == 'on' ? 'checked' : '';
-        $excludeheading = $options['excludeheading'] == 'on' ? 'checked' : '';
+        $exclude_elems = $options['exclude_elems'];
         $ignore = $options['ignore'];
         $ignorepost = $options['ignorepost'];
         $maxlinks = $options['maxlinks'];
@@ -222,6 +240,7 @@ class PromoteMDN {
         $customkey_url = stripslashes( $options['customkey_url'] );
         $customkey_url_expire = stripslashes( $options['customkey_url_expire'] );
         $blanko = $options['blanko'] == 'on' ? 'checked' : '';
+        $add_src_param = $options['add_src_param'] == 'on' ? 'checked' : '';
         $allowfeed = $options['allowfeed'] == 'on' ? 'checked' : '';
 
         $nonce = wp_create_nonce( 'promote-mdn' );
@@ -259,11 +278,14 @@ class PromoteMDN {
                 <button type="submit" name="reload_now" id="reload_now"><?php _e( 'Reload now' , 'promote-mdn' ) ?></button>
                 </p>
                 <input type="checkbox" name="allowfeed" <?php echo $allowfeed ?>/> <label for="allowfeed"><?php _e( 'Add links to RSS feeds' , 'promote-mdn' ) ?></label><br/>
+                <input type="checkbox" name="add_src_param" <?php echo $add_src_param ?>/> <label for="add_src_param"><?php _e( 'Include src url param (Helps MDN measure effectiveness)' , 'promote-mdn' ) ?></label> <br/>
                 <input type="checkbox" name="blanko" <?php echo $blanko ?>/> <label for="blanko"><?php _e( 'Open links in new window' , 'promote-mdn' ) ?></label> <br/>
 
 
                 <h4><?php _e( 'Exceptions' , 'promote-mdn' ) ?></h4>
-                <input type="checkbox" name="excludeheading" <?php echo $excludeheading ?>/> <label for="excludeheading"><?php _e( 'Do not add links in heading tags (h1,h2,h3,h4,h5,h6).' , 'promote-mdn' ) ?></label><br/>
+
+                <p><?php _e( 'Do not add links inside the following HTML elements (comma-separated, partial-matching):' , 'promote-mdn' ) ?></p>
+                <input type="text" name="exclude_elems" value="<?php echo $exclude_elems ?>" class="full-width"/>
                 <p><?php _e( 'Do not add links to the following posts or pages (comma-separated id, slug, name):' , 'promote-mdn' ) ?></p>
                 <input type="text" name="ignorepost" value="<?php echo $ignorepost ?>" class="full-width"/>
                 <p><?php _e( 'Do not add links on the following phrases (comma-separated):' , 'promote-mdn' ) ?></p>
@@ -297,7 +319,7 @@ localUrlEl.onclick = function() {
     var urlInput = document.getElementById("customkey_url"),
         reloadBtn = document.getElementById("reload_now"),
         re = /([\w-]+)\/docs/;
-    urlInput.value = urlInput.value.replace(re, '<?php echo str_replace('_', '-', WPLANG); ?>/docs');
+    urlInput.value = urlInput.value.replace( re, '<?php echo str_replace( '_', '-', WPLANG ); ?>/docs' );
     reloadBtn.click();
 }
 </script>
@@ -308,9 +330,10 @@ localUrlEl.onclick = function() {
     public function get_version_notices()
     {
         return array(
-        'new' => sprintf( __( "Thanks for installing! Go to the <a href=\"%s\">settings</a> page to configure.", 'promote-mdn' ), 'options-general.php?page=promote-mdn.php'),
-        '1.3' => sprintf( __( "fr_FR translation, new sidebar <a href=\"%s\">widget</a>, <a href=\"%s\">setting</a> for a locale-specific URL for keywords.", 'promote-mdn' ) , 'widgets.php', 'options-general.php?page=promote-mdn.php' ),
-    );
+        'new' => sprintf( __( 'Thanks for installing! Go to the <a href="%s">settings</a> page to configure, and the <a href="%s">widgets</a> page to add widget.', 'promote-mdn' ), 'options-general.php?page=promote-mdn.php', 'widgets.php' ),
+        '1.3' => sprintf( __( 'fr_FR translation, new sidebar <a href="%s">widget</a>, <a href="%s">setting</a> for a locale-specific URL for keywords.', 'promote-mdn' ) , 'widgets.php', 'options-general.php?page=promote-mdn.php' ),
+        '1.4' => sprintf( __( 'You can exclude links from any HTML elements, not just headers; include a src url param on links; text and color options for the <a href="%s">widget</a>', 'promote-mdn' ), 'widgets.php' ),
+        );
     }
 
     function admin_menu()
@@ -320,9 +343,13 @@ localUrlEl.onclick = function() {
 
     function hide_href( $version ) {
         $param_char = '?';
-        if ( strpos($_SERVER['REQUEST_URI'], '?') !== false )
-            $param_char = '&';
-        return $_SERVER['REQUEST_URI'] . $param_char . 'hide=' . $version;
+        if ( isset( $_SERVER['REQUEST_URI'] ) ) {
+            if ( strpos( $_SERVER['REQUEST_URI'], '?' ) !== false )
+                $param_char = '&';
+            return $_SERVER['REQUEST_URI'] . $param_char . 'hide=' . $version;
+        } else {
+            return 'hide=' . $version;
+        }
     }
 
 	function admin_notices() {
@@ -338,7 +365,7 @@ localUrlEl.onclick = function() {
 }
 </style>
 <?php
-        $hide_notices = $this->options['hide_notices'] ? $this->options['hide_notices'] : array();
+        $hide_notices = isset( $this->options['hide_notices']) ? $this->options['hide_notices'] : array();
         if ( isset( $_GET['hide'] ) ) {
             $version = $_GET['hide'];
             $this->options['hide_notices'][$version] = true;
@@ -347,8 +374,12 @@ localUrlEl.onclick = function() {
         }
         foreach ( $this->get_version_notices() as $version => $notice ) {
             if ( !array_key_exists( $version, $hide_notices ) ) {
+                // overload notice action to call upgrade methods as necessary
+                $upgrade_method = 'upgrade_' . str_replace( '.', '', $version );
+                if ( method_exists( $this, $upgrade_method ) )
+                    $this->$upgrade_method();
 ?>
-    <div class="updated"><p class="promote-mdn-notice"><a href="options-general.php?page=promote-mdn.php"><?php _e( 'Promote MDN', 'promote-mdn' ) ?></a> <?php echo $version ?> - <?php echo $notice ?></p><a href="<?php echo $this->hide_href($version) ?>"><?php _e( 'hide', 'promote-mdn' ) ?></a></div>
+    <div class="updated"><p class="promote-mdn-notice"><a href="options-general.php?page=promote-mdn.php"><?php _e( 'Promote MDN', 'promote-mdn' ) ?></a> <?php echo $version ?> - <?php echo $notice ?></p><a href="<?php echo $this->hide_href( $version ) ?>"><?php _e( 'hide', 'promote-mdn' ) ?></a></div>
 <?php
             }
         }
@@ -360,6 +391,15 @@ localUrlEl.onclick = function() {
         $options = get_option( $this->option_name );
         if (!$options)
             update_option( $this->option_name, $this->install_options );
+    }
+
+    function upgrade_14()
+    {
+        $options                  = get_option( $this->option_name );
+        $options['exclude_elems'] = 'blockquote, code, h, pre, q';
+        $options['add_src_param'] = 'on';
+        unset( $options['exclude_heading'] );
+        update_option( $this->option_name, $options );
     }
 }
 
@@ -376,21 +416,81 @@ if ( !class_exists( 'PromoteMDN_Widget' ) ) :
             );
         }
 
-        public function widget( $args, $installstance ) {
+        public function widget( $args, $instance ) {
+            $img = 'promobutton_mdn4.png';
+            $img_array = array(
+                'gray_css'          => 'promobutton_mdn1.png',
+                'gray_html'         => 'promobutton_mdn2.png',
+                'gray_javascript'   => 'promobutton_mdn3.png',
+                'gray_web'          => 'promobutton_mdn4.png',
+                'orange_css'        => 'promobutton_mdn5.png',
+                'orange_html'       => 'promobutton_mdn6.png',
+                'orange_javascript' => 'promobutton_mdn7.png',
+                'orange_web'        => 'promobutton_mdn8.png',
+                'red_css'           => 'promobutton_mdn9.png',
+                'red_html'          => 'promobutton_mdn10.png',
+                'red_javascript'    => 'promobutton_mdn11.png',
+                'red_web'           => 'promobutton_mdn12.png',
+            );
             extract( $args );
-            $title = apply_filters( __( 'Promote MDN', 'promote-mdn' ), $instance['title'] );
-
-            echo $before_widget;
-            if ( ! empty( $title ) )
-                echo $before_title . $title . $after_title;
+            if ( isset( $before_widget ) )
+                echo $before_widget;
+            if ( isset( $instance['color'] ) && isset( $instance['text'] ) )
+                $img = $img_array[$instance['color'].'_'.strtolower( $instance['text'] )];
 ?>
     <section style="text-align: center;">
-        <a href="https://developer.mozilla.org" target="_blank"><img src="https://developer.mozilla.org/media/img/promote/promobutton_mdn37.png" /></a><br />
+        <a href="https://developer.mozilla.org" target="_blank"><img src="https://developer.mozilla.org/media/img/promote/<?php echo $img; ?>" /></a><br />
         <a href="https://developer.mozilla.org/promote" target="_blank"><?php _e( 'Help Promote MDN!', 'promote-mdn' ) ?></a><br />
         <a href="http://wordpress.org/extend/plugins/promote-mdn/" target="_blank"><?php _e( 'Get the WordPress plugin', 'promote-mdn' ) ?></a>
     </section>
 <?php
-            echo $after_widget;
+            if ( isset( $after_widget ) )
+                echo $after_widget;
+        }
+
+        public function form( $instance ) {
+            $colors = array(
+                'gray'      => __( 'Gray' ),
+                'red'       => __( 'Red' ),
+                'orange'    => __( 'Orange' ),
+            );
+            $texts          = array( 'HTML', 'CSS', 'JavaScript', 'Web' );
+            $selected_color = 'grey';
+            $selected_text  = 'Web';
+            if ( isset( $instance['color'] ) )
+                $selected_color = $instance['color'];
+            if ( isset( $instance['text'] ) )
+                $selected_text = $instance['text'];
+?>
+    <section>
+        <label for="<?php echo $this->get_field_id( 'color' ); ?>"><?php _e( 'Color:' ); ?></label>
+        <select id="<?php echo $this->get_field_id( 'color' ); ?>" name="<?php echo $this->get_field_name( 'color' ); ?>">
+<?php
+            foreach ( $colors as $value => $color ) {
+                $selected = ( $value == $selected_color ) ? 'selected' : '';
+?>
+            <option value="<?php echo $value ?>" <?php echo $selected ?>><?php echo $color ?></option>
+<?php
+            }
+?>
+        </select><br/>
+        <label for="<?php echo $this->get_field_id( 'text' ); ?>"><?php _e( 'Text:' ); ?></label>
+        <select id="<?php echo $this->get_field_id( 'text' ); ?>" name="<?php echo $this->get_field_name( 'text' ); ?>">
+<?php
+            foreach ( $texts as $text ) {
+                $selected = ( $text == $selected_text ) ? 'selected' : '';
+?>
+            <option value="<?php echo $text ?>" <?php echo $selected ?>><?php echo $text ?></option>
+<?php
+            }
+?>
+        </select>
+    </section>
+<?php
+        }
+
+        public function update( $new_instance ) {
+            return $new_instance;
         }
     }
 endif;

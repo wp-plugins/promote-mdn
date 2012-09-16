@@ -55,12 +55,18 @@ Using locale-specific links will improve your readers' experience.
 2. Automatically linking 'HTML5', 'HTML', and 'JavaScript' keywords.
 
 == Changelog ==
+= 1.4 =
+* Exclude links from any HTML elements
+* src url param to help MDN measure effectiveness
+* Color & Text options for widget
+* See [GitHub Milestone](https://github.com/groovecoder/wp-promote-mdn/issues?milestone=2&page=1&state=closed)
+
 = 1.3 =
 * New Sidebar Widget
 * Install/upgrade notifications in admin pages
 * Use locale-specific URL for keywords/phrases links
 * Add French translation
-[GitHub Milestone](https://github.com/groovecoder/wp-promote-mdn/issues?milestone=1&page=1&state=closed)
+* See [GitHub Milestone](https://github.com/groovecoder/wp-promote-mdn/issues?milestone=1&page=1&state=closed)
 
 = 1.2 =
 * Internationalization and initial translations - Polish, Dutch, German, Portuguese (Brazil)
