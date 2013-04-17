@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Promote MDN
-Version: 1.4.0
+Version: 1.5.0
 Plugin URI: http://github.com/groovecoder/wp-promote-mdn
 Author: Luke Crouch
 Author URI: http://groovecoder.com
@@ -11,12 +11,11 @@ Text Domain: promote-mdn
 
 // Avoid name collisions.
 if ( !class_exists( 'PromoteMDN' ) ) :
-
 class PromoteMDN {
     public $option_name = 'PromoteMDN';
     public $options;
     public $install_options = array(
-        'exclude_elems' => 'blockquote, code, h, pre, q',
+        'exclude_elems' => 'blockquote, code, h, pre, q, script',
         'ignore' => 'about,',
         'ignorepost' => 'contact,',
         'maxlinks' => 3,
@@ -77,8 +76,8 @@ class PromoteMDN {
         if ( $exclude_elems ) {
             // add salt to elements
             foreach ( $exclude_elems as $el ) {
-                $re   = sprintf( '|(<%s.*?>)(.*?)(</%s.*?>)|sie', $el, $el );
-                $text = preg_replace( $re, "'\\1'.wp_insertspecialchars('\\2').'\\3'", $text );
+                $re   = sprintf( '|(<%s.*?>)(.*?)(</%s.*?>)|si', $el, $el );
+                $text = preg_replace_callback( $re, create_function( '$matches', 'return $matches[1] . wp_insertspecialchars($matches[2]) . $matches[3];' ), $text );
             }
         }
 
@@ -134,10 +133,10 @@ class PromoteMDN {
                         }
                         $href = $url;
                         if ( $options['add_src_param'] == TRUE ) $href .= '?src=wp-promote-mdn';
-                        $replace = "<a $target title=\"$1\" href=\"$href\">$1</a>";
+                        $link = "<a $target title=\"%s\" href=\"$href\">%s</a>";
                         $regexp  = str_replace( '$name', $name, $reg );
-                        //$regexp="/(?!(?:[^<]+>|[^>]+<\/a>))(?<!\p{L})($name)(?!\p{L})/imsU";
-                        $newtext = preg_replace( $regexp, $replace, $text, $maxsingle );
+                        $replace = 'return sprintf(\'' . $link . '\', $matches[1], $matches[1]);';
+                        $newtext = preg_replace_callback( $regexp, create_function( '$matches', $replace ), $text, $maxsingle );
                         if ( $newtext != $text ) {
                             $links++;
                             $text = $newtext;
@@ -151,8 +150,8 @@ class PromoteMDN {
         if ( $exclude_elems ) {
             // remove salt from elements
             foreach ( $exclude_elems as $el ) {
-                $re   = sprintf( '|(<%s.*?>)(.*?)(</%s.*?>)|sie', $el, $el );
-                $text = preg_replace( $re, "'\\1'.wp_removespecialchars('\\2').'\\3'", $text );
+                $re   = sprintf( '|(<%s.*?>)(.*?)(</%s.*?>)|si', $el, $el );
+                $text = preg_replace_callback( $re, create_function( '$matches', 'return $matches[1] . wp_removespecialchars($matches[2]) . $matches[3];' ), $text );
             }
         }
         return trim( $text );
@@ -262,40 +261,40 @@ class PromoteMDN {
 <?php
         $top_img_title = __( 'MDN is your Web Developer Toolbox for docs, demos and more on HTML, CSS, JavaScript and other Web standards and open technologies.' , 'promote-mdn' );
 ?>
-        <a href="https://developer.mozilla.org/web/?WT.mc_id=mdn37" title="<?php echo $top_img_title ?>"><img src="https://developer.mozilla.org/media/img/promote/promobutton_mdn37.png" id="logo" alt="<?php echo $top_img_title ?>" /></a>
+        <a href="https://developer.mozilla.org/web/?WT.mc_id=mdn37" title="<?php echo esc_html( $top_img_title ) ?>"><img src="https://developer.mozilla.org/media/img/promote/promobutton_mdn37.png" id="logo" alt="<?php echo esc_html( $top_img_title ) ?>" /></a>
         <p><?php _e( 'MDN is the best online resource - for web developers, by web developers.', 'promote-mdn' ) ?> </p>
         <p><?php _e( 'Promote MDN automatically links keywords and phrases in your posts and pages to MDN URLs.' , 'promote-mdn' ) ?></p>
 
-        <form name="PromoteMDN" action="<?php echo $action_url ?>" method="post">
-        <input type="hidden" id="_wpnonce" name="_wpnonce" value="<?php echo $nonce ?>" />
+        <form name="PromoteMDN" action="<?php echo esc_html( $action_url ) ?>" method="post">
+        <input type="hidden" id="_wpnonce" name="_wpnonce" value="<?php echo esc_html( $nonce ) ?>" />
                 <input type="hidden" name="submitted" value="1" />
 
 
                 <h4><?php _e( 'Settings' , 'promote-mdn' ) ?></h4>
-                <p><?php _e( 'Load keywords from URL' , 'promote-mdn' ) ?> (<em id="preview"><a href="<?php echo $customkey_url ?>" target="_blank"><?php _e( 'Preview' , 'promote-mdn' ) ?></a></em>):
-                <input type="text" name="customkey_url" id="customkey_url" value="<?php echo $customkey_url ?>" style="width: 95%" /><a id="use_local_url" href="#"><img src="https://wiki.mozilla.org/images/a/af/Localization.png" width="24" height="24" title="<?php echo sprintf( __( 'Use keywords and links specifically for %s', 'promote-mdn' ), WPLANG ) ?>"/></a><br />
-                <?php _e( 'Reload keywords after (seconds):' , 'promote-mdn' ) ?> <input type="text" name="customkey_url_expire" size="10" value="<?php echo $customkey_url_expire ?>"/>
+                <p><?php _e( 'Load keywords from URL' , 'promote-mdn' ) ?> (<em id="preview"><a href="<?php echo esc_html( $customkey_url ) ?>" target="_blank"><?php _e( 'Preview' , 'promote-mdn' ) ?></a></em>):
+                <input type="text" name="customkey_url" id="customkey_url" value="<?php echo esc_html( $customkey_url ) ?>" style="width: 95%" /><a id="use_local_url" href="#"><img src="https://wiki.mozilla.org/images/a/af/Localization.png" width="24" height="24" title="<?php echo esc_html( sprintf( __( 'Use keywords and links specifically for %s', 'promote-mdn' ), WPLANG ) ) ?>"/></a><br />
+                <?php _e( 'Reload keywords after (seconds):' , 'promote-mdn' ) ?> <input type="text" name="customkey_url_expire" size="10" value="<?php echo esc_html( $customkey_url_expire ) ?>"/>
                 <button type="submit" name="reload_now" id="reload_now"><?php _e( 'Reload now' , 'promote-mdn' ) ?></button>
                 </p>
-                <input type="checkbox" name="allowfeed" <?php echo $allowfeed ?>/> <label for="allowfeed"><?php _e( 'Add links to RSS feeds' , 'promote-mdn' ) ?></label><br/>
-                <input type="checkbox" name="add_src_param" <?php echo $add_src_param ?>/> <label for="add_src_param"><?php _e( 'Include src url param (Helps MDN measure effectiveness)' , 'promote-mdn' ) ?></label> <br/>
-                <input type="checkbox" name="blanko" <?php echo $blanko ?>/> <label for="blanko"><?php _e( 'Open links in new window' , 'promote-mdn' ) ?></label> <br/>
+                <input type="checkbox" name="allowfeed" <?php echo esc_html( $allowfeed ) ?>/> <label for="allowfeed"><?php _e( 'Add links to RSS feeds' , 'promote-mdn' ) ?></label><br/>
+                <input type="checkbox" name="add_src_param" <?php echo esc_html( $add_src_param ) ?>/> <label for="add_src_param"><?php _e( 'Include src url param (Helps MDN measure effectiveness)' , 'promote-mdn' ) ?></label> <br/>
+                <input type="checkbox" name="blanko" <?php echo esc_html( $blanko ) ?>/> <label for="blanko"><?php _e( 'Open links in new window' , 'promote-mdn' ) ?></label> <br/>
 
 
                 <h4><?php _e( 'Exceptions' , 'promote-mdn' ) ?></h4>
 
                 <p><?php _e( 'Do not add links inside the following HTML elements (comma-separated, partial-matching):' , 'promote-mdn' ) ?></p>
-                <input type="text" name="exclude_elems" value="<?php echo $exclude_elems ?>" class="full-width"/>
+                <input type="text" name="exclude_elems" value="<?php echo esc_html( $exclude_elems ) ?>" class="full-width"/>
                 <p><?php _e( 'Do not add links to the following posts or pages (comma-separated id, slug, name):' , 'promote-mdn' ) ?></p>
-                <input type="text" name="ignorepost" value="<?php echo $ignorepost ?>" class="full-width"/>
+                <input type="text" name="ignorepost" value="<?php echo esc_html( $ignorepost ) ?>" class="full-width"/>
                 <p><?php _e( 'Do not add links on the following phrases (comma-separated):' , 'promote-mdn' ) ?></p>
-                <input type="text" name="ignore" class="full-width" value="<?php echo $ignore ?>"/>
+                <input type="text" name="ignore" class="full-width" value="<?php echo esc_html( $ignore ) ?>"/>
 
 
                 <h4><?php _e( 'Limits' , 'promote-mdn' ) ?></h4>
-                <?php _e( 'Max links to generate per post:' , 'promote-mdn' ) ?> <input type="text" name="maxlinks" size="2" value="<?php echo $maxlinks ?>"/><br/>
-                <?php _e( 'Max links to generate for a single keyword/phrase:' , 'promote-mdn' ) ?> <input type="text" name="maxsingle" size="2" value="<?php echo $maxsingle ?>"/><br/>
-                <?php _e( 'Max links to generate for a single URL:' , 'promote-mdn' ) ?> <input type="text" name="maxsingleurl" size="2" value="<?php echo $maxsingleurl ?>"/>
+                <?php _e( 'Max links to generate per post:' , 'promote-mdn' ) ?> <input type="text" name="maxlinks" size="2" value="<?php echo esc_html( $maxlinks ) ?>"/><br/>
+                <?php _e( 'Max links to generate for a single keyword/phrase:' , 'promote-mdn' ) ?> <input type="text" name="maxsingle" size="2" value="<?php echo esc_html( $maxsingle ) ?>"/><br/>
+                <?php _e( 'Max links to generate for a single URL:' , 'promote-mdn' ) ?> <input type="text" name="maxsingleurl" size="2" value="<?php echo esc_html( $maxsingleurl ) ?>"/>
 
 
                 <h4><?php _e( 'Custom Keywords' , 'promote-mdn' ) ?></h4>
@@ -305,7 +304,7 @@ sumo, http://support.mozilla.org/
                 </pre>
                 </p>
 
-                <textarea name="customkey" id="customkey" rows="10" cols="90"  ><?php echo $customkey ?></textarea>
+                <textarea name="customkey" id="customkey" rows="10" cols="90"  ><?php echo esc_html( $customkey ) ?></textarea>
                 <em><?php _e( 'Note: These keywords will take priority over those loaded at the URL. If you have too many custom keywords here, you may not link to MDN at all.' , 'promote-mdn' ) ?></em>
                 <div class="submit"><input type="submit" name="Submit" value="<?php _e( 'Update options' , 'promote-mdn' ) ?>" class="button-primary" /></div>
             </form>
@@ -319,7 +318,7 @@ localUrlEl.onclick = function() {
     var urlInput = document.getElementById("customkey_url"),
         reloadBtn = document.getElementById("reload_now"),
         re = /([\w-]+)\/docs/;
-    urlInput.value = urlInput.value.replace( re, '<?php echo str_replace( '_', '-', WPLANG ); ?>/docs' );
+    urlInput.value = urlInput.value.replace( re, '<?php echo esc_html( str_replace( '_', '-', WPLANG  ) ); ?>/docs' );
     reloadBtn.click();
 }
 </script>
@@ -333,6 +332,7 @@ localUrlEl.onclick = function() {
         'new' => sprintf( __( 'Thanks for installing! Go to the <a href="%s">settings</a> page to configure, and the <a href="%s">widgets</a> page to add widget.', 'promote-mdn' ), 'options-general.php?page=promote-mdn.php', 'widgets.php' ),
         '1.3' => sprintf( __( 'fr_FR translation, new sidebar <a href="%s">widget</a>, <a href="%s">setting</a> for a locale-specific URL for keywords.', 'promote-mdn' ) , 'widgets.php', 'options-general.php?page=promote-mdn.php' ),
         '1.4' => sprintf( __( 'You can exclude links from any HTML elements, not just headers; include a src url param on links; text and color options for the <a href="%s">widget</a>', 'promote-mdn' ), 'widgets.php' ),
+        '1.5' => __( 'Security fixes.', 'promote-mdn' ),
         );
     }
 
@@ -379,7 +379,7 @@ localUrlEl.onclick = function() {
                 if ( method_exists( $this, $upgrade_method ) )
                     $this->$upgrade_method();
 ?>
-    <div class="updated"><p class="promote-mdn-notice"><a href="options-general.php?page=promote-mdn.php"><?php _e( 'Promote MDN', 'promote-mdn' ) ?></a> <?php echo $version ?> - <?php echo $notice ?></p><a href="<?php echo $this->hide_href( $version ) ?>"><?php _e( 'hide', 'promote-mdn' ) ?></a></div>
+    <div class="updated"><p class="promote-mdn-notice"><a href="options-general.php?page=promote-mdn.php"><?php _e( 'Promote MDN', 'promote-mdn' ) ?></a> <?php echo esc_html( $version ) ?> - <?php echo esc_html( $notice ) ?></p><a href="<?php echo esc_html( $this->hide_href( $version ) ) ?>"><?php _e( 'hide', 'promote-mdn' ) ?></a></div>
 <?php
             }
         }
@@ -402,7 +402,6 @@ localUrlEl.onclick = function() {
         update_option( $this->option_name, $options );
     }
 }
-
 endif;
 
 if ( !class_exists( 'PromoteMDN_Widget' ) ) :
@@ -439,7 +438,7 @@ if ( !class_exists( 'PromoteMDN_Widget' ) ) :
                 $img = $img_array[$instance['color'].'_'.strtolower( $instance['text'] )];
 ?>
     <section style="text-align: center;">
-        <a href="https://developer.mozilla.org" target="_blank"><img src="https://developer.mozilla.org/media/img/promote/<?php echo $img; ?>" /></a><br />
+        <a href="https://developer.mozilla.org" target="_blank"><img src="https://developer.mozilla.org/media/img/promote/<?php echo esc_html( $img ); ?>" /></a><br />
         <a href="https://developer.mozilla.org/promote" target="_blank"><?php _e( 'Help Promote MDN!', 'promote-mdn' ) ?></a><br />
         <a href="http://wordpress.org/extend/plugins/promote-mdn/" target="_blank"><?php _e( 'Get the WordPress plugin', 'promote-mdn' ) ?></a>
     </section>
@@ -463,24 +462,24 @@ if ( !class_exists( 'PromoteMDN_Widget' ) ) :
                 $selected_text = $instance['text'];
 ?>
     <section>
-        <label for="<?php echo $this->get_field_id( 'color' ); ?>"><?php _e( 'Color:' ); ?></label>
-        <select id="<?php echo $this->get_field_id( 'color' ); ?>" name="<?php echo $this->get_field_name( 'color' ); ?>">
+        <label for="<?php echo esc_html( $this->get_field_id( 'color' ) ); ?>"><?php _e( 'Color:' ); ?></label>
+        <select id="<?php echo esc_html( $this->get_field_id( 'color' ) ); ?>" name="<?php echo esc_html( $this->get_field_name( 'color' ) ); ?>">
 <?php
             foreach ( $colors as $value => $color ) {
                 $selected = ( $value == $selected_color ) ? 'selected' : '';
 ?>
-            <option value="<?php echo $value ?>" <?php echo $selected ?>><?php echo $color ?></option>
+            <option value="<?php echo esc_html( $value ) ?>" <?php echo esc_html( $selected ) ?>><?php echo esc_html( $color ) ?></option>
 <?php
             }
 ?>
         </select><br/>
-        <label for="<?php echo $this->get_field_id( 'text' ); ?>"><?php _e( 'Text:' ); ?></label>
-        <select id="<?php echo $this->get_field_id( 'text' ); ?>" name="<?php echo $this->get_field_name( 'text' ); ?>">
+        <label for="<?php echo esc_html( $this->get_field_id( 'text' ) ); ?>"><?php _e( 'Text:' ); ?></label>
+        <select id="<?php echo esc_html( $this->get_field_id( 'text' ) ); ?>" name="<?php echo esc_html( $this->get_field_name( 'text' ) ); ?>">
 <?php
             foreach ( $texts as $text ) {
                 $selected = ( $text == $selected_text ) ? 'selected' : '';
 ?>
-            <option value="<?php echo $text ?>" <?php echo $selected ?>><?php echo $text ?></option>
+            <option value="<?php echo esc_html( $text ) ?>" <?php echo esc_html( $selected ) ?>><?php echo esc_html( $text ) ?></option>
 <?php
             }
 ?>
