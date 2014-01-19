@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Promote MDN
-Version: 1.5.0
+Version: 1.6.0
 Plugin URI: http://github.com/groovecoder/wp-promote-mdn
 Author: Luke Crouch
 Author URI: http://groovecoder.com
@@ -27,8 +27,9 @@ class PromoteMDN {
         'add_src_param' => 'on',
         'allowfeed' => '',
         'maxsingleurl' => '1',
-        'hide_notices' => array( '1.3' => 1, '1.4' => 1 ),
+        'hide_notices' => array( '1.3' => 1, '1.4' => 1, '1.5' => 1 ),
     );
+    public $tracking_querystring = '?utm_source=wordpress%%20blog&utm_medium=content%%20link&utm_campaign=promote%%20mdn';
 
     function __construct( $options = null )
     {
@@ -85,8 +86,7 @@ class PromoteMDN {
         $reg      = '/(?!(?:[^<\[]+[>\]]|[^>\]]+<\/a>))\b($name)\b/imsU';
         $text     = " $text ";
 
-        if ( !empty( $options['customkey_url'] ) )
-        {
+        if ( !empty( $options['customkey_url'] ) ) {
             if ( false === ( $customkey_url_value = get_transient( 'promote_mdn_url_value' ) ) ){
                 $customkey_url_value = $this->reload_value( $options['customkey_url'] );
             }
@@ -112,8 +112,7 @@ class PromoteMDN {
                         if ( !empty( $keyword ) ) $kw_array[$keyword] = $url;
                 }
             }
-            foreach ( $kw_array as $name => $url )
-            {
+            foreach ( $kw_array as $name => $url ) {
                 if ( in_array( strtolower( $name ), $arrignore ) )
                     continue;
                 if (   ( !$maxlinks || ( $links < $maxlinks ) )
@@ -132,7 +131,7 @@ class PromoteMDN {
                             $target = 'target="_blank"';
                         }
                         $href = $url;
-                        if ( $options['add_src_param'] == TRUE ) $href .= '?src=wp-promote-mdn';
+                        if ( $options['add_src_param'] == TRUE ) $href .= $this->tracking_querystring;
                         $link = "<a $target title=\"%s\" href=\"$href\">%s</a>";
                         $regexp  = str_replace( '$name', $name, $reg );
                         $replace = 'return sprintf(\'' . $link . '\', $matches[1], $matches[1]);';
@@ -180,8 +179,7 @@ class PromoteMDN {
         $arr = explode( $separator, $text );
 
         $ret = array();
-        foreach ( $arr as $e )
-        {
+        foreach ( $arr as $e ) {
           $ret[] = strtolower( trim( $e ) );
         }
         // return empty array for single empty string element
@@ -203,9 +201,8 @@ class PromoteMDN {
                 $options['customkey_url'] = $customkey_url;
                 $customkey_url_value      = $this->reload_value( $customkey_url );
                 $reloaded_message         = __( 'Reloaded values from the URL.', 'promote-mdn' );
-                $message_box              = '<div class="updated fade"><p>' . $reloaded_message . '</p></div>';
                 update_option( $this->option_name, $options );
-                echo $message_box;
+                echo '<div class="updated fade"><p>' . $reloaded_message . '</p></div>';
             } else {
                 $options['exclude_elems']        = $_POST['exclude_elems'];
                 $options['ignore']               = $_POST['ignore'];
@@ -246,12 +243,13 @@ class PromoteMDN {
 ?>
 <style type="text/css">
     #mainblock { width:600px; }
-    #logo { float: right; margin-bottom: 1em; }
+    #logo { width: 100%; }
     .full-width { width: 100% }
     input { padding: .5em; }
     h4 { color: white; background: black; clear: both; padding: .5em; }
     pre { margin-bottom: -1em; }
     #use_local_url img { position: relative; top: 8px; }
+    textarea { resize:vertical; }
 </style>
 
 <div class="wrap">
@@ -261,7 +259,7 @@ class PromoteMDN {
 <?php
         $top_img_title = __( 'MDN is your Web Developer Toolbox for docs, demos and more on HTML, CSS, JavaScript and other Web standards and open technologies.' , 'promote-mdn' );
 ?>
-        <a href="https://developer.mozilla.org/web/?WT.mc_id=mdn37" title="<?php echo esc_html( $top_img_title ) ?>"><img src="https://developer.mozilla.org/media/img/promote/promobutton_mdn37.png" id="logo" alt="<?php echo esc_html( $top_img_title ) ?>" /></a>
+        <a href="https://developer.mozilla.org/web/?WT.mc_id=mdn37" title="<?php echo esc_html( $top_img_title ) ?>"><img src="https://developer.cdn.mozilla.net/media/redesign/img/mdn_logo-wordmark-full_color.svg" id="logo" alt="<?php echo esc_html( $top_img_title ) ?>" /></a>
         <p><?php _e( 'MDN is the best online resource - for web developers, by web developers.', 'promote-mdn' ) ?> </p>
         <p><?php _e( 'Promote MDN automatically links keywords and phrases in your posts and pages to MDN URLs.' , 'promote-mdn' ) ?></p>
 
@@ -271,13 +269,15 @@ class PromoteMDN {
 
 
                 <h4><?php _e( 'Settings' , 'promote-mdn' ) ?></h4>
-                <p><?php _e( 'Load keywords from URL' , 'promote-mdn' ) ?> (<em id="preview"><a href="<?php echo esc_html( $customkey_url ) ?>" target="_blank"><?php _e( 'Preview' , 'promote-mdn' ) ?></a></em>):
-                <input type="text" name="customkey_url" id="customkey_url" value="<?php echo esc_html( $customkey_url ) ?>" style="width: 95%" /><a id="use_local_url" href="#"><img src="https://wiki.mozilla.org/images/a/af/Localization.png" width="24" height="24" title="<?php echo esc_html( sprintf( __( 'Use keywords and links specifically for %s', 'promote-mdn' ), WPLANG ) ) ?>"/></a><br />
+                <p><?php _e( 'Load keywords from URL:' , 'promote-mdn' ) ?>
+                <input type="text" name="customkey_url" id="customkey_url" value="<?php echo esc_html( $customkey_url ) ?>" style="width: 75%" />
+                <a class="button-secondary" id="preview" href="<?php echo esc_html( $customkey_url ) ?>" target="_blank"><?php _e( 'Preview' , 'promote-mdn' ) ?></a>
+                <a id="use_local_url" class="button-secondary" href="#"  title="<?php echo esc_html( sprintf( __( 'Use keywords and links specifically for %s', 'promote-mdn' ), WPLANG ) ) ?>"><?php _e( 'Switch to locale-specific list' , 'promote-mdn' ) ?></a><br />
                 <?php _e( 'Reload keywords after (seconds):' , 'promote-mdn' ) ?> <input type="text" name="customkey_url_expire" size="10" value="<?php echo esc_html( $customkey_url_expire ) ?>"/>
-                <button type="submit" name="reload_now" id="reload_now"><?php _e( 'Reload now' , 'promote-mdn' ) ?></button>
+                <button class="button-secondary" type="submit" name="reload_now" id="reload_now"><?php _e( 'Reload now' , 'promote-mdn' ) ?></button>
                 </p>
                 <input type="checkbox" name="allowfeed" <?php echo esc_html( $allowfeed ) ?>/> <label for="allowfeed"><?php _e( 'Add links to RSS feeds' , 'promote-mdn' ) ?></label><br/>
-                <input type="checkbox" name="add_src_param" <?php echo esc_html( $add_src_param ) ?>/> <label for="add_src_param"><?php _e( 'Include src url param (Helps MDN measure effectiveness)' , 'promote-mdn' ) ?></label> <br/>
+                <input type="checkbox" name="add_src_param" <?php echo esc_html( $add_src_param ) ?>/> <label for="add_src_param"><?php _e( 'Include src url params (Helps MDN measure effectiveness)' , 'promote-mdn' ) ?></label> <br/>
                 <input type="checkbox" name="blanko" <?php echo esc_html( $blanko ) ?>/> <label for="blanko"><?php _e( 'Open links in new window' , 'promote-mdn' ) ?></label> <br/>
 
 
@@ -304,7 +304,7 @@ sumo, http://support.mozilla.org/
                 </pre>
                 </p>
 
-                <textarea name="customkey" id="customkey" rows="10" cols="90"  ><?php echo esc_html( $customkey ) ?></textarea>
+                <textarea class="full-width" name="customkey" id="customkey" rows="10" cols="90"  ><?php echo esc_html( $customkey ) ?></textarea>
                 <em><?php _e( 'Note: These keywords will take priority over those loaded at the URL. If you have too many custom keywords here, you may not link to MDN at all.' , 'promote-mdn' ) ?></em>
                 <div class="submit"><input type="submit" name="Submit" value="<?php _e( 'Update options' , 'promote-mdn' ) ?>" class="button-primary" /></div>
             </form>
@@ -333,6 +333,7 @@ localUrlEl.onclick = function() {
         '1.3' => sprintf( __( 'fr_FR translation, new sidebar <a href="%s">widget</a>, <a href="%s">setting</a> for a locale-specific URL for keywords.', 'promote-mdn' ) , 'widgets.php', 'options-general.php?page=promote-mdn.php' ),
         '1.4' => sprintf( __( 'You can exclude links from any HTML elements, not just headers; include a src url param on links; text and color options for the <a href="%s">widget</a>', 'promote-mdn' ), 'widgets.php' ),
         '1.5' => __( 'Security fixes.', 'promote-mdn' ),
+        '1.6' => sprintf( __( 'You can now notify Mozilla Press and DevRel teams via email when you publish your posts!', 'promote-mdn' ), 'widgets.php' ),
         );
     }
 
@@ -356,7 +357,7 @@ localUrlEl.onclick = function() {
 ?>
 <style>
 .promote-mdn-notice {
-  background: url(https://developer.mozilla.org/media/img/mdn-logo-tiny.png) 0 0 no-repeat;
+  background: url(https://developer.cdn.mozilla.net/media/redesign/img/MDNLogo.png) 0 0 no-repeat;
   padding: 18px 20px 18px 62px !important;
   display: inline-block;
   color: #999;
@@ -379,7 +380,7 @@ localUrlEl.onclick = function() {
                 if ( method_exists( $this, $upgrade_method ) )
                     $this->$upgrade_method();
 ?>
-    <div class="updated"><p class="promote-mdn-notice"><a href="options-general.php?page=promote-mdn.php"><?php _e( 'Promote MDN', 'promote-mdn' ) ?></a> <?php echo esc_html( $version ) ?> - <?php echo esc_html( $notice ) ?></p><a href="<?php echo esc_html( $this->hide_href( $version ) ) ?>"><?php _e( 'hide', 'promote-mdn' ) ?></a></div>
+    <div class="updated"><p class="promote-mdn-notice"><a href="options-general.php?page=promote-mdn.php"><?php _e( 'Promote MDN', 'promote-mdn' ) ?></a> <?php echo esc_html( $version ) ?> - <?php echo $notice ?></p><a href="<?php echo esc_html( $this->hide_href( $version ) ) ?>"><?php _e( 'hide', 'promote-mdn' ) ?></a></div>
 <?php
             }
         }
@@ -433,7 +434,7 @@ if ( !class_exists( 'PromoteMDN_Widget' ) ) :
             );
             extract( $args );
             if ( isset( $before_widget ) )
-                echo $before_widget;
+                echo esc_html( $before_widget );
             if ( isset( $instance['color'] ) && isset( $instance['text'] ) )
                 $img = $img_array[$instance['color'].'_'.strtolower( $instance['text'] )];
 ?>
@@ -444,7 +445,7 @@ if ( !class_exists( 'PromoteMDN_Widget' ) ) :
     </section>
 <?php
             if ( isset( $after_widget ) )
-                echo $after_widget;
+                echo esc_html( $after_widget );
         }
 
         public function form( $instance ) {
@@ -494,6 +495,66 @@ if ( !class_exists( 'PromoteMDN_Widget' ) ) :
     }
 endif;
 
+if ( !class_exists( 'PromoteMDN_Notifier' ) ) :
+    class PromoteMDN_Notifier {
+
+        public function __construct() {
+            add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
+            add_action( 'publish_post', array( $this, 'notify_mozilla' ) );
+        }
+
+        public function add_meta_box( $post_type ) {
+            $post_types = array( 'post' ); // limit meta box to certain types
+            if ( in_array( $post_type, $post_types ) ) {
+                add_meta_box(
+                    'major-publishing-actions'
+                    ,__( 'Promote MDN', 'promote-mdn' )
+                    ,array( $this, 'render_meta_box_content' )
+                    ,$post_type
+                    ,'side'
+                    ,'high'
+                );
+            }
+        }
+
+        public function render_meta_box_content( $post ) {
+?>
+    <input name="notify_mozilla" type="checkbox" value="1" /><?php echo esc_html( __( 'Notify Mozilla of this post', 'promote-mdn' ) ); ?>
+<?php
+        }
+
+        public function notify_mozilla( $post_id ) {
+            if(    ( $_POST['post_status'] == 'publish' )
+                && ( $_POST['original_post_status'] != 'publish' )
+                && ( $_POST['notify_mozilla'] == '1' ) ) {
+                $post = get_post($post_id);
+                $author = get_userdata($post->post_author);
+                $author_email = $author->user_email;
+                $recipients = ['devrel@mozilla.com', 'press@mozilla.com'];
+                $email_subject = $author_email . ' published post "' . get_the_title( $post ) . '" to ' . get_bloginfo( 'name' );
+
+                ob_start();
+?>
+View post at: <?php echo get_permalink( $post ); ?> \n
+Email author at: <?php echo $author_email; ?>
+<?php
+
+                $message = ob_get_contents();
+
+                ob_end_clean();
+
+                error_log( "Mail:" );
+                error_log( "Recipients: " . var_export( $recipients, true ) );
+                error_log( "Subject: " . $email_subject );
+                error_log( "Message: " . $message );
+
+                wp_mail( $recipients, $email_subject, $message );
+            }
+        }
+
+    }
+endif;
+
 if ( class_exists( 'PromoteMDN' ) ) :
     $in_phpunit = false;
     if ( array_key_exists( 'argv', $GLOBALS ) ) {
@@ -507,6 +568,17 @@ if ( class_exists( 'PromoteMDN' ) ) :
         if ( isset( $PromoteMDN ) ) {
             register_activation_hook( __FILE__, array( &$PromoteMDN, 'install' ) );
         }
+    }
+endif;
+
+function call_notifier() {
+    new PromoteMDN_Notifier();
+}
+
+if ( class_exists( 'PromoteMDN_Notifier' ) ) :
+    if ( is_admin() ) {
+        add_action( 'load-post.php', 'call_notifier' );
+        add_action( 'load-post-new.php', 'call_notifier' );
     }
 endif;
 
